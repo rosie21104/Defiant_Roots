@@ -2,12 +2,48 @@ import os
 import sys
 import json
 import database
+import re
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+def send_nudge_notification(experiment_id: int, week_num: int, plant_name: str, weather_context: str, raw_message: str, preference: str, contact_info: str) -> bool:
+    """
+    Validates, logs to database, and simulates sending a nudge notification.
+    Returns True if validation and log-before-send succeed, False otherwise.
+    """
+    # 1. Cap all outgoing messages at 320 characters
+    capped_msg = raw_message[:320]
+    
+    # 2. Strip any markdown formatting before sending
+    clean_msg = re.sub(r"[\*\_`#]+", "", capped_msg)
+    clean_msg = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", clean_msg)
+    
+    # 3. Verify the message contains the user's active plant name as a sanity check
+    if plant_name.lower() not in clean_msg.lower():
+        print(f"❌ Sanity Check Failed: Message does not contain active plant name '{plant_name}'", file=sys.stderr)
+        return False
+        
+    if "sms" in preference.lower():
+        delivery_log = f"Sent via SMS to {contact_info}"
+    else:
+        delivery_log = f"Sent via Email to {contact_info}"
+        
+    try:
+        # 4. Log every outbound notification to the database with a timestamp before the send is triggered
+        database.add_weekly_nudge(experiment_id, week_num, weather_context, clean_msg, delivery_log=delivery_log)
+        print(f"📝 Pre-send log written to database for Experiment #{experiment_id} (Week {week_num}).")
+    except Exception as e:
+        print(f"❌ Failed to write database log before sending notification: {e}", file=sys.stderr)
+        return False
+        
+    # Trigger the simulated send
+    print(f"📡 SIMULATED DELIVERY TRIGGERED: {delivery_log}")
+    print(f"💬 Outbound Message content:\n\"{clean_msg}\"\n")
+    return True
 
 def run_loop_worker(target_experiment_id: int = None):
     """Runs a simulated weekly check-in, weather query, and nudge message generation."""
@@ -103,15 +139,19 @@ def run_loop_worker(target_experiment_id: int = None):
         # 4. Save to Database with Simulated Delivery Log
         phone_val = row["user_phone"] if row["user_phone"] else "+1-555-0199"
         email_val = row["user_email"] if row["user_email"] else "rosalyn@example.com"
+        contact_info = phone_val if "sms" in preference.lower() else email_val
         
-        if "sms" in preference.lower():
-            delivery_log = f"Sent via SMS to {phone_val}"
-        else:
-            delivery_log = f"Sent via Email to {email_val}"
-            
-        print(f"📡 SIMULATED DELIVERY: {delivery_log}")
-        database.add_weekly_nudge(exp_id, week_num, weather_context, nudge_msg, delivery_log=delivery_log)
-        print(f"✅ Saved nudge, weather context, and delivery log to weekly_logs for Experiment #{exp_id} (Week {week_num}).")
+        # Validate, log, and send notification
+        success = send_nudge_notification(
+            exp_id, week_num, plant_name, weather_context, nudge_msg, preference, contact_info
+        )
+        
+        if not success:
+            print("⚠️ Output validation check failed. Re-trying with safe system fallback message...")
+            fallback_msg = f"Hey {user_name}! Quick check-in for your {plant_name} in {location} for week {week_num}. How is it holding up with the local weather?"
+            send_nudge_notification(
+                exp_id, week_num, plant_name, weather_context, fallback_msg, preference, contact_info
+            )
 
 if __name__ == "__main__":
     run_loop_worker()
