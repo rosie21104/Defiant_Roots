@@ -166,6 +166,7 @@ def init_db():
         user_feedback TEXT,
         action_plan TEXT,
         image_path TEXT,
+        image_blob BLOB,
         delivery_log TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -176,6 +177,12 @@ def init_db():
     # Ensure image_path column exists in weekly_logs (migration)
     try:
         cursor.execute("ALTER TABLE weekly_logs ADD COLUMN image_path TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    # Ensure image_blob column exists in weekly_logs (migration)
+    try:
+        cursor.execute("ALTER TABLE weekly_logs ADD COLUMN image_blob BLOB")
     except sqlite3.OperationalError:
         pass
 
@@ -393,8 +400,12 @@ def add_weekly_nudge(experiment_id: int, week_number: int, weather_context: str,
     conn.commit()
     conn.close()
 
-def add_weekly_feedback(experiment_id: int, week_number: int, user_feedback: str, action_plan: str, image_path: str = None):
-    """Saves user feedback, image path, and dynamical action plan for a week, and increments current_week."""
+def add_weekly_feedback(experiment_id: int, week_number: int, user_feedback: str, action_plan: str, image_path: str = None, image_blob: bytes = None):
+    """Saves user feedback, image path, image BLOB, and dynamical action plan for a week, and increments current_week."""
+    # Size validation on the image BLOB field before any insert (enforce 5MB limit)
+    if image_blob is not None and len(image_blob) > 5 * 1024 * 1024:
+        raise ValueError("Image BLOB exceeds 5MB size limit.")
+        
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -408,14 +419,14 @@ def add_weekly_feedback(experiment_id: int, week_number: int, user_feedback: str
     if row:
         cursor.execute("""
         UPDATE weekly_logs 
-        SET user_feedback = ?, action_plan = ?, image_path = ?, updated_at = CURRENT_TIMESTAMP
+        SET user_feedback = ?, action_plan = ?, image_path = ?, image_blob = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-        """, (user_feedback, action_plan, image_path, row["id"]))
+        """, (user_feedback, action_plan, image_path, sqlite3.Binary(image_blob) if image_blob else None, row["id"]))
     else:
         cursor.execute("""
-        INSERT INTO weekly_logs (experiment_id, week_number, user_feedback, action_plan, image_path)
-        VALUES (?, ?, ?, ?, ?)
-        """, (experiment_id, week_number, user_feedback, action_plan, image_path))
+        INSERT INTO weekly_logs (experiment_id, week_number, user_feedback, action_plan, image_path, image_blob)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (experiment_id, week_number, user_feedback, action_plan, image_path, sqlite3.Binary(image_blob) if image_blob else None))
         
     # Increment experiment current_week
     cursor.execute("""

@@ -7,6 +7,10 @@ from google.genai import types
 from pydantic import BaseModel, Field
 from datetime import datetime
 import database
+import re
+import requests
+import io
+from PIL import Image
 
 # Load environment variables
 load_dotenv()
@@ -130,13 +134,18 @@ def query_youbuddy(query_text: str) -> str:
             return result.stdout.strip()
         else:
             # Fallback locally if subprocess command fails
+            print(f"⚠️ YouBuddy Subprocess failed (exit code {result.returncode}):", file=sys.stderr)
+            if result.stderr:
+                print(result.stderr.strip(), file=sys.stderr)
             import query_youbuddy_cli
             return query_youbuddy_cli.generate_crowdsourced_fallback(query_text)
     except Exception as e:
+        print(f"⚠️ Exception running YouBuddy subprocess: {e}", file=sys.stderr)
         try:
             import query_youbuddy_cli
             return query_youbuddy_cli.generate_crowdsourced_fallback(query_text)
-        except Exception:
+        except Exception as fallback_err:
+            print(f"⚠️ Fallback also failed: {fallback_err}", file=sys.stderr)
             return f"Failed to execute YouBuddy subprocess: {e}"
 
 def get_selected_experiment():
@@ -770,49 +779,79 @@ with tab1:
             
         with col2:
             if submit_btn:
-                with st.spinner("Root Orchestrator querying specialists..."):
-                    plan = get_adaptation_plan(plant_input, location_input)
-                    # Save to searches database
-                    database.save_adaptation_search(
-                        plant_input, location_input, plan.conflict, plan.blueprint,
-                        youbuddy_insights=plan.youbuddy_insights, startup_phase=plan.startup_phase
-                    )
-                    # Create an active experiment linked to the user ID
-                    exp_id = database.create_experiment(
-                        st.session_state.user["user_id"],
-                        plant_input,
-                        location_input,
-                        plan.conflict,
-                        plan.blueprint,
-                        youbuddy_insights=plan.youbuddy_insights,
-                        startup_phase=plan.startup_phase
-                    )
-                    
-                    # Re-fetch all user experiments
-                    import json
-                    exps = database.get_user_experiments(st.session_state.user["user_id"])
-                    st.session_state.experiments = []
-                    for row in exps:
-                        try:
-                            bp_list = json.loads(row["blueprint"])
-                        except Exception:
-                            bp_list = row["blueprint"]
-                        st.session_state.experiments.append({
-                            "id": row["id"],
-                            "plant_name": row["plant_name"],
-                            "location": row["location"],
-                            "conflict": row["conflict"],
-                            "blueprint": bp_list,
-                            "current_week": row["current_week"],
-                            "youbuddy_insights": row["youbuddy_insights"] if "youbuddy_insights" in row.keys() else "",
-                            "startup_phase": row["startup_phase"] if "startup_phase" in row.keys() else "",
-                            "created_at": row["created_at"]
-                        })
-                    
-                    # Select the newly created experiment
-                    st.session_state.selected_experiment_id = exp_id
-                    st.success(f"🌱 Active Experiment started for {plant_input} (Week 1)! View progress in Tab 2.")
-                    st.rerun()
+                # 1. Sanitize plant name (cap at 80 characters, alphanumeric + spaces)
+                plant_sanitized = plant_input.strip()[:80]
+                if not plant_sanitized:
+                    st.error("Please enter a plant name.")
+                elif not re.match(r"^[a-zA-Z0-9\s]+$", plant_sanitized):
+                    st.error("Plant name must only contain alphanumeric characters and spaces.")
+                else:
+                    # 2. Validate location using Nominatim Geocoding API
+                    with st.spinner("Verifying location..."):
+                        import sys
+                        
+                        def geocode_location(loc_name: str) -> str | None:
+                            url = "https://nominatim.openstreetmap.org/search"
+                            headers = {"User-Agent": "DefiantRootsApp/1.0 (rosalyn.velasquez@gmail.com)"}
+                            params = {"q": loc_name, "format": "json", "limit": 1}
+                            try:
+                                response = requests.get(url, headers=headers, params=params, timeout=10)
+                                if response.status_code == 200:
+                                    data = response.json()
+                                    if data:
+                                        return data[0].get("display_name")
+                            except Exception as e:
+                                print(f"⚠️ Geocoding request failed: {e}", file=sys.stderr)
+                            return None
+                        
+                        location_validated = geocode_location(location_input.strip())
+                        
+                    if not location_validated:
+                        st.error("We couldn't verify your location. Please enter a valid city and state/country.")
+                    else:
+                        with st.spinner("Root Orchestrator querying specialists..."):
+                            plan = get_adaptation_plan(plant_sanitized, location_validated)
+                            # Save to searches database
+                            database.save_adaptation_search(
+                                plant_sanitized, location_validated, plan.conflict, plan.blueprint,
+                                youbuddy_insights=plan.youbuddy_insights, startup_phase=plan.startup_phase
+                            )
+                            # Create an active experiment linked to the user ID
+                            exp_id = database.create_experiment(
+                                st.session_state.user["user_id"],
+                                plant_sanitized,
+                                location_validated,
+                                plan.conflict,
+                                plan.blueprint,
+                                youbuddy_insights=plan.youbuddy_insights,
+                                startup_phase=plan.startup_phase
+                            )
+                            
+                            # Re-fetch all user experiments
+                            import json
+                            exps = database.get_user_experiments(st.session_state.user["user_id"])
+                            st.session_state.experiments = []
+                            for row in exps:
+                                try:
+                                    bp_list = json.loads(row["blueprint"])
+                                except Exception:
+                                    bp_list = row["blueprint"]
+                                st.session_state.experiments.append({
+                                    "id": row["id"],
+                                    "plant_name": row["plant_name"],
+                                    "location": row["location"],
+                                    "conflict": row["conflict"],
+                                    "blueprint": bp_list,
+                                    "current_week": row["current_week"],
+                                    "youbuddy_insights": row["youbuddy_insights"] if "youbuddy_insights" in row.keys() else "",
+                                    "startup_phase": row["startup_phase"] if "startup_phase" in row.keys() else "",
+                                    "created_at": row["created_at"]
+                                })
+                            
+                            # Select the newly created experiment
+                            st.session_state.selected_experiment_id = exp_id
+                            st.success(f"🌱 Active Experiment started for {plant_sanitized} (Week 1)! View progress in Tab 2.")
+                            st.rerun()
             
             # Render blueprint if active experiment selected
             active_exp = get_selected_experiment()
@@ -1066,33 +1105,65 @@ with tab2:
                         
                     if feedback_submit:
                         if feedback_input:
-                            with st.spinner("Proactive Progress Agent generating Action Plan for the Week..."):
-                                image_bytes = None
-                                mime_type = None
-                                image_path = None
-                                if uploaded_image is not None:
-                                    # Ensure uploads directory exists
-                                    os.makedirs("uploads", exist_ok=True)
-                                    ext = uploaded_image.name.split(".")[-1]
-                                    image_path = f"uploads/exp_{active_exp['id']}_week_{current_week}.{ext}"
-                                    with open(image_path, "wb") as f:
-                                        f.write(uploaded_image.getbuffer())
-                                    image_bytes = uploaded_image.getvalue()
-                                    mime_type = uploaded_image.type
-
-                                # Generate action plan with Gemini
-                                blueprint_str = ", ".join(active_exp["blueprint"])
-                                action_plan = generate_weekly_action_plan(
-                                    feedback_input, 
-                                    weather_info, 
-                                    blueprint_str,
-                                    image_bytes=image_bytes,
-                                    mime_type=mime_type,
-                                    plant=active_exp["plant_name"]
-                                )
+                            image_bytes = None
+                            mime_type = None
+                            image_path = None
+                            is_image_valid = True
+                            
+                            if uploaded_image is not None:
+                                # 1. Validate file size (enforce 5MB maximum file size)
+                                max_size = 5 * 1024 * 1024 # 5MB
+                                raw_bytes = uploaded_image.getvalue()
+                                if len(raw_bytes) > max_size:
+                                    st.error("Uploaded image exceeds the 5MB size limit. Please upload a smaller photo.")
+                                    is_image_valid = False
+                                else:
+                                    # 2. Validate MIME type using magic bytes (not just the file extension)
+                                    if raw_bytes[:3] == b"\xff\xd8\xff":
+                                        detected_mime = "image/jpeg"
+                                    elif raw_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+                                        detected_mime = "image/png"
+                                    else:
+                                        detected_mime = None
+                                        
+                                    if not detected_mime:
+                                        st.error("Invalid image format. Only JPEG and PNG photos are accepted.")
+                                        is_image_valid = False
+                                    else:
+                                        # 3. Strip EXIF metadata from the image before passing it to Gemini
+                                        try:
+                                            img = Image.open(io.BytesIO(raw_bytes))
+                                            out_stream = io.BytesIO()
+                                            fmt = "PNG" if detected_mime == "image/png" else "JPEG"
+                                            img.save(out_stream, format=fmt)
+                                            image_bytes = out_stream.getvalue()
+                                            mime_type = detected_mime
+                                            
+                                            # Save clean image file to uploads directory
+                                            os.makedirs("uploads", exist_ok=True)
+                                            ext = "png" if detected_mime == "image/png" else "jpg"
+                                            image_path = f"uploads/exp_{active_exp['id']}_week_{current_week}.{ext}"
+                                            with open(image_path, "wb") as f:
+                                                f.write(image_bytes)
+                                        except Exception as e:
+                                            st.error("Failed to process the uploaded photo. It may be corrupted.")
+                                            is_image_valid = False
+                                            
+                            if is_image_valid:
+                                with st.spinner("Proactive Progress Agent generating Action Plan for the Week..."):
+                                    # Generate action plan with Gemini
+                                    blueprint_str = ", ".join(active_exp["blueprint"])
+                                    action_plan = generate_weekly_action_plan(
+                                        feedback_input, 
+                                        weather_info, 
+                                        blueprint_str,
+                                        image_bytes=image_bytes,
+                                        mime_type=mime_type,
+                                        plant=active_exp["plant_name"]
+                                    )
                                 
-                                # Save feedback, action plan, and image path to DB (this also increments current_week in DB)
-                                database.add_weekly_feedback(active_exp["id"], current_week, feedback_input, action_plan, image_path=image_path)
+                                # Save feedback, action plan, and image path/BLOB to DB (this also increments current_week in DB)
+                                database.add_weekly_feedback(active_exp["id"], current_week, feedback_input, action_plan, image_path=image_path, image_blob=image_bytes)
                                 
                                 # Re-fetch experiments to update current_week in session state
                                 exps = database.get_user_experiments(st.session_state.user["user_id"])
