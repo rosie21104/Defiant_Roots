@@ -11,6 +11,7 @@ import re
 import requests
 import io
 from PIL import Image
+import bleach
 
 # Load environment variables
 load_dotenv()
@@ -1235,9 +1236,14 @@ with tab3:
             
         if log_submit:
             if grower_input and plant_log_input and location_log_input and hack_input:
-                database.add_community_log(grower_input, plant_log_input, location_log_input, status_input, hack_input)
-                st.success("Successfully posted your log!")
-                st.rerun()
+                grower_name_clean = grower_input.strip()
+                posts_today = database.get_user_posts_today(grower_name_clean)
+                if posts_today >= 10:
+                    st.error("Rate limit exceeded: You can only post 10 community logs per day.")
+                else:
+                    database.add_community_log(grower_name_clean, plant_log_input.strip()[:80], location_log_input.strip(), status_input, hack_input.strip())
+                    st.success("Successfully posted your log!")
+                    st.rerun()
             else:
                 st.error("Please fill out all fields.")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1301,13 +1307,16 @@ with tab3:
                 except Exception:
                     c_time = comment['timestamp']
                     
+                # Run all user-submitted comments through bleach with tags stripped before rendering
+                bleached_text = bleach.clean(comment["comment_text"], tags=[], strip=True)
+                
                 st.markdown(
                     f'<div class="comment-box">'
                     f'<div class="comment-header">'
                     f'<span class="comment-author">👤 {comment["commenter_name"]}</span>'
                     f'<span class="comment-date">{c_time}</span>'
                     f'</div>'
-                    f'<p class="comment-text">{comment["comment_text"]}</p>'
+                    f'<p class="comment-text">{bleached_text}</p>'
                     f'</div>',
                     unsafe_allow_html=True
                 )
@@ -1321,9 +1330,13 @@ with tab3:
                     
                 if c_submit:
                     if c_author and c_text:
-                        database.add_comment(log_id, c_author, c_text)
-                        st.success("Reply added!")
-                        st.rerun()
+                        # 500-character limit per comment
+                        if len(c_text.strip()) > 500:
+                            st.error("Comments are limited to 500 characters.")
+                        else:
+                            database.add_comment(log_id, c_author.strip(), c_text.strip())
+                            st.success("Reply added!")
+                            st.rerun()
                     else:
                         st.error("Please enter your name and comment.")
             

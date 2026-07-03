@@ -438,6 +438,18 @@ def add_weekly_feedback(experiment_id: int, week_number: int, user_feedback: str
     conn.commit()
     conn.close()
 
+def get_user_posts_today(grower_name: str) -> int:
+    """Returns the count of community logs posted by grower_name today (local time)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT COUNT(*) FROM community_logs 
+    WHERE grower_name = ? AND date(timestamp, 'localtime') = date('now', 'localtime')
+    """, (grower_name,))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
 if __name__ == "__main__":
     init_db()
     print("Database successfully initialized.")
