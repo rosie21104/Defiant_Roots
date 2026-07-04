@@ -15,10 +15,10 @@ def send_nudge_notification(experiment_id: int, week_num: int, plant_name: str, 
     Validates, logs to database, and simulates sending a nudge notification.
     Returns True if validation and log-before-send succeed, False otherwise.
     """
-    # 1. Cap all outgoing messages at 320 characters
+    # 1. Cap all outgoing messages at 320 characters to keep SMS/Email lengths reasonable
     capped_msg = raw_message[:320]
     
-    # 2. Strip any markdown formatting before sending
+    # 2. Strip any markdown formatting before sending so raw markdown tokens are not sent over SMS/Email channels
     clean_msg = re.sub(r"[\*\_`#]+", "", capped_msg)
     clean_msg = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", clean_msg)
     
@@ -33,7 +33,8 @@ def send_nudge_notification(experiment_id: int, week_num: int, plant_name: str, 
         delivery_log = f"Sent via Email to {contact_info}"
         
     try:
-        # 4. Log every outbound notification to the database with a timestamp before the send is triggered
+        # 4. Log every outbound notification to the database with a timestamp before the send is triggered.
+        # This pre-send logging ensures audit logs are written even if the communication gateway fails.
         database.add_weekly_nudge(experiment_id, week_num, weather_context, clean_msg, delivery_log=delivery_log)
         print(f"📝 Pre-send log written to database for Experiment #{experiment_id} (Week {week_num}).")
     except Exception as e:
@@ -49,14 +50,16 @@ def run_loop_worker(target_experiment_id: int = None):
     """Runs a simulated weekly check-in, weather query, and nudge message generation."""
     print("🌿 Starting Proactive Loop Background Worker...")
     
+    # Verify presence of Gemini API key
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("❌ Error: GEMINI_API_KEY not found in environment variables.")
         sys.exit(1)
         
+    # Initialize the standard Gemini Client
     client = genai.Client(api_key=api_key)
     
-    # 1. Fetch active experiments
+    # 1. Fetch active experiments from database (single target or all active)
     if target_experiment_id:
         active_exps = database.get_active_experiment_by_id(target_experiment_id)
     else:
@@ -79,7 +82,8 @@ def run_loop_worker(target_experiment_id: int = None):
         print(f"👉 Processing Experiment #{exp_id}: {plant_name} in {location} (Week {week_num}) for user {user_name}")
         print(f"Preference: {preference}")
         
-        # 2. Gather Live Weather Context via Extreme Climate Agent with Search Grounding
+        # 2. Gather Live Weather Context via Extreme Climate Agent with Google Search Grounding
+        # This runs live Google searches using the model's search tool to fetch the actual local forecast.
         print("🔍 Querying Extreme Climate Agent with Google Search Grounding...")
         weather_prompt = f"""
         You are the Extreme Climate Agent. 
@@ -93,6 +97,7 @@ def run_loop_worker(target_experiment_id: int = None):
                 model='gemini-2.5-flash',
                 contents=weather_prompt,
                 config=types.GenerateContentConfig(
+                    # Enabling Google Search grounding tool
                     tools=[types.Tool(google_search=types.GoogleSearch())]
                 )
             )
@@ -100,10 +105,12 @@ def run_loop_worker(target_experiment_id: int = None):
             print("🌦️ Weather Context Gathered:")
             print(weather_context)
         except Exception as e:
+            # Fallback on search failure to ensure the app doesn't crash during network outages
             print(f"⚠️ Search grounding failed. Falling back to default weather. Error: {e}")
             weather_context = f"Sunny, warm conditions around 85°F in {location}. No critical storm warnings."
             
         # 3. Draft Proactive Nudge using Gemini
+        # Drafts the message and formats it based on preference (SMS text vs Email)
         print("✍️ Drafting contact-preference nudge message...")
         nudge_prompt = f"""
         You are the Proactive Progress Agent for the Defiant Roots project.
@@ -123,7 +130,7 @@ def run_loop_worker(target_experiment_id: int = None):
         """
         
         try:
-            # Ensure we use Gemini Developer API, not Vertex AI
+            # Pop GOOGLE_GENAI_USE_VERTEXAI to ensure standard Gemini Developer API is called
             os.environ.pop("GOOGLE_GENAI_USE_VERTEXAI", None)
             nudge_resp = client.models.generate_content(
                 model='gemini-2.5-flash',
@@ -133,6 +140,7 @@ def run_loop_worker(target_experiment_id: int = None):
             print("✉️ Generated Nudge Message:")
             print(nudge_msg)
         except Exception as e:
+            # Simple template-based fallback if text drafting fails
             print(f"❌ Failed to draft nudge. Error: {e}")
             nudge_msg = f"Hey {user_name}! Quick check-in for your {plant_name} in {location} for week {week_num}. How is it holding up with the local weather?"
             
@@ -147,6 +155,7 @@ def run_loop_worker(target_experiment_id: int = None):
         )
         
         if not success:
+            # If safety/sanity checks fail, fall back to a safe system-generated message format
             print("⚠️ Output validation check failed. Re-trying with safe system fallback message...")
             fallback_msg = f"Hey {user_name}! Quick check-in for your {plant_name} in {location} for week {week_num}. How is it holding up with the local weather?"
             send_nudge_notification(

@@ -11,6 +11,7 @@ def generate_crowdsourced_fallback(query_text: str) -> str:
     if api_key:
         try:
             from google import genai
+            # Pop GOOGLE_GENAI_USE_VERTEXAI to ensure standard Gemini Developer API is called
             os.environ.pop("GOOGLE_GENAI_USE_VERTEXAI", None)
             client = genai.Client(api_key=api_key)
             prompt = f"""
@@ -33,7 +34,7 @@ def generate_crowdsourced_fallback(query_text: str) -> str:
         except Exception:
             pass
             
-    # Absolute Fallback if even Gemini fails
+    # Absolute Fallback if even Gemini is down or quota limits are exceeded
     return (
         "YouTube Community Notes (Compiled Fallback):\n"
         "- @HighDesertHacks recommends using thick straw mulch and temporary shade screens during high heat.\n"
@@ -48,11 +49,12 @@ def main():
         
     query_text = sys.argv[1]
     
+    # Add external ADK agent code to the import path dynamically
     agent_dir = "/Users/rosalynvelasquez/Antigravity/Capstone/adk-samples/python/agents/youtube-analyst"
     if agent_dir not in sys.path:
         sys.path.insert(0, agent_dir)
         
-    # Sync keys
+    # Synchronize keys across standard environmental variables
     os.environ["YOUTUBE_API_KEY"] = os.environ.get("YOUTUBE_API_KEY", "")
     api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
@@ -64,7 +66,8 @@ def main():
         from google.adk.sessions import InMemorySessionService
         from google.genai import types
         
-        # Filter out load_artifacts to avoid errors
+        # Security/Runtime Gate: Filter out 'load_artifacts' tool from the youtube-analyst agent.
+        # This prevents the agent from attempting to read or write local configuration files during evaluations.
         if hasattr(root_agent, "tools"):
             filtered_tools = []
             for t in root_agent.tools:
@@ -74,10 +77,12 @@ def main():
                 filtered_tools.append(t)
             root_agent.tools = filtered_tools
             
+        # Initialize an InMemorySessionService to orchestrate the ADK Runner locally
         session_service = InMemorySessionService()
         session = session_service.create_session_sync(user_id="defiant_roots", app_name="youbuddy")
         runner = Runner(agent=root_agent, session_service=session_service, app_name="youbuddy")
         
+        # Execute the YouTube Analyst agent to fetch crop advice
         message = types.Content(role="user", parts=[types.Part.from_text(text=query_text)])
         events = runner.run(
             new_message=message,
@@ -91,13 +96,14 @@ def main():
                 responses.append(event.text)
                 
         output_text = "".join(responses)
+        # If the ADK agent returned nothing, invoke the LLM synthesis fallback
         if not output_text.strip() or "No response from YouTube Analyst" in output_text:
             output_text = generate_crowdsourced_fallback(query_text)
             
         print(output_text.strip())
             
     except Exception as e:
-        # Fallback to simulated query results on exception
+        # Fallback to simulated query results on exception (e.g. missing files, library mismatches)
         fallback_text = generate_crowdsourced_fallback(query_text)
         print(fallback_text.strip())
 

@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 defiant_roots.db
+.DS_Store
+Images/
+Submission /
+uploads/

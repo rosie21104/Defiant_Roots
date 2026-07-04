@@ -13,10 +13,12 @@ def get_db_connection():
 
 def init_db():
     """Initializes database tables and populates seed data if empty."""
+    # Establish connection with SQLite.
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # 1. Users Table
+    # 1. Users Table: Holds permanent user credentials, contact preferences, and phone numbers.
+    # Enables selecting between Email and SMS nudges.
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         user_id TEXT PRIMARY KEY,
@@ -28,21 +30,23 @@ def init_db():
     )
     """)
 
-    # Ensure contact_preference column exists (migration)
+    # Migration: Dynamically add 'contact_preference' column if not present in older databases
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN contact_preference TEXT DEFAULT 'Email'")
         conn.commit()
     except sqlite3.OperationalError:
+        # Avoid error if column already exists (SQLite lacks ALTER TABLE ADD COLUMN IF NOT EXISTS)
         pass
 
-    # Ensure phone column exists (migration)
+    # Migration: Dynamically add 'phone' column if not present in older databases
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN phone TEXT")
         conn.commit()
     except sqlite3.OperationalError:
         pass
 
-    # 2. Experiments Table
+    # 2. Experiments Table: Tracks user's active crop engineering journeys.
+    # Records target crop, location, the climate conflict, adaptation blueprint hacks, and startup tips.
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS experiments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +65,7 @@ def init_db():
     )
     """)
 
-    # Ensure new columns exist in experiments (migration)
+    # Migration: Add crowd-sourced insights and start-up phase details to experiments
     try:
         cursor.execute("ALTER TABLE experiments ADD COLUMN youbuddy_insights TEXT")
     except sqlite3.OperationalError:
@@ -71,7 +75,7 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
-    # 3. Adaptation Searches Table
+    # 3. Adaptation Searches Table: Caches historical query outcomes to avoid redundant LLM calls.
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS adaptation_searches (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,7 +89,7 @@ def init_db():
     )
     """)
 
-    # Ensure new columns exist in adaptation_searches (migration)
+    # Migration: Add crowd-sourced insights and start-up phase details to searches
     try:
         cursor.execute("ALTER TABLE adaptation_searches ADD COLUMN youbuddy_insights TEXT")
     except sqlite3.OperationalError:
@@ -95,7 +99,8 @@ def init_db():
     except sqlite3.OperationalError:
         pass
     
-    # 4. Community Logs Table
+    # 4. Community Logs Table: Feeds the "Plant Gossip" grapevine section.
+    # Displays grower status (Adapting, Experimenting, Thriving) and latest environmental hacks.
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS community_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,6 +112,13 @@ def init_db():
         latest_hack TEXT NOT NULL
     )
     """)
+    
+    # Migration: Add optional question field to logs to let community troubleshoot issues together
+    try:
+        cursor.execute("ALTER TABLE community_logs ADD COLUMN question TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
     
     # 5. Comments Table
     cursor.execute("""
@@ -215,14 +227,14 @@ def get_adaptation_searches():
     conn.close()
     return rows
 
-def add_community_log(grower_name: str, plant_name: str, location: str, status: str, latest_hack: str):
+def add_community_log(grower_name: str, plant_name: str, location: str, status: str, latest_hack: str, question: str = None):
     """Inserts a new growing log into the community board."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO community_logs (grower_name, plant_name, location, status, latest_hack)
-    VALUES (?, ?, ?, ?, ?)
-    """, (grower_name, plant_name, location, status, latest_hack))
+    INSERT INTO community_logs (grower_name, plant_name, location, status, latest_hack, question)
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, (grower_name, plant_name, location, status, latest_hack, question))
     conn.commit()
     log_id = cursor.lastrowid
     conn.close()
@@ -402,20 +414,21 @@ def add_weekly_nudge(experiment_id: int, week_number: int, weather_context: str,
 
 def add_weekly_feedback(experiment_id: int, week_number: int, user_feedback: str, action_plan: str, image_path: str = None, image_blob: bytes = None):
     """Saves user feedback, image path, image BLOB, and dynamical action plan for a week, and increments current_week."""
-    # Size validation on the image BLOB field before any insert (enforce 5MB limit)
+    # Size validation on the image BLOB field before any insert (enforce 5MB limit for safety and storage sanity)
     if image_blob is not None and len(image_blob) > 5 * 1024 * 1024:
         raise ValueError("Image BLOB exceeds 5MB size limit.")
         
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Check if entry already exists
+    # Check if entry already exists (allows updating the same week before moving to next week)
     cursor.execute("""
     SELECT id FROM weekly_logs 
     WHERE experiment_id = ? AND week_number = ?
     """, (experiment_id, week_number))
     row = cursor.fetchone()
     
+    # All statements use parameterized SQL parameters (?) to prevent SQL injection vulnerabilities
     if row:
         cursor.execute("""
         UPDATE weekly_logs 
@@ -428,7 +441,7 @@ def add_weekly_feedback(experiment_id: int, week_number: int, user_feedback: str
         VALUES (?, ?, ?, ?, ?, ?)
         """, (experiment_id, week_number, user_feedback, action_plan, image_path, sqlite3.Binary(image_blob) if image_blob else None))
         
-    # Increment experiment current_week
+    # Increment the experiment week counter to unlock the next weekly check-in cycle
     cursor.execute("""
     UPDATE experiments 
     SET current_week = ? + 1, updated_at = CURRENT_TIMESTAMP

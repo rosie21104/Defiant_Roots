@@ -13,13 +13,13 @@ import io
 from PIL import Image
 import bleach
 
-# Load environment variables
+# Load environmental configurations (API keys, settings) from local .env
 load_dotenv()
 
-# Initialize database tables and seed values
+# Initialize SQLite database tables and seed sample community logs if empty
 database.init_db()
 
-# Initialize session state for user authentication
+# Initialize Streamlit session state stores to maintain authentication and progress history
 if "user" not in st.session_state:
     st.session_state.user = None
 if "experiments" not in st.session_state:
@@ -172,37 +172,97 @@ CSS = """
 
 /* Main App Layout */
 .stApp {
-    background-color: #FDFBF7 !important;
-    color: #2D3732 !important;
+    background-color: #FAF8F5 !important;
+    color: #121614 !important;
     font-family: 'Outfit', sans-serif !important;
 }
 
-/* Custom Header Card */
-.header-container {
-    background: #EAF0EB;
+/* Custom Hero Banner */
+.hero-banner {
+    background: linear-gradient(135deg, #1E352F 0%, #121614 100%) !important;
     border-radius: 16px;
-    padding: 2.5rem;
-    margin-bottom: 2rem;
-    border: 1px solid #D2DFD5;
-    box-shadow: 0 4px 12px rgba(45, 75, 55, 0.04);
+    padding: 1.1rem 2rem !important;
+    margin-bottom: 1.5rem;
+    border-bottom: 4px solid #D96B43;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
 
-.header-title {
-    color: #2D4B37;
-    font-size: 2.5rem;
-    font-weight: 700;
-    margin-top: 0;
-    margin-bottom: 0.5rem;
+.hero-content {
+    max-width: 950px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.hero-header {
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 0.35rem;
 }
 
-.header-subtitle {
-    color: #608066;
-    font-size: 1.1rem;
-    font-weight: 400;
-    margin: 0;
+.hero-title {
+    color: #FAF8F5 !important;
+    font-size: 3.7rem !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    font-family: 'Outfit', sans-serif !important;
+    letter-spacing: -0.03em;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.hero-title-suffix {
+    font-weight: 400 !important;
+    font-style: italic !important;
+    font-size: 0.85em !important;
+}
+
+.hero-subtitle {
+    color: #D2DFD5 !important;
+    font-size: 1.75rem !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Image Showcase styling */
+.gallery-title {
+    text-align: center;
+    color: #1E352F;
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: -0.01em;
+}
+
+div[data-testid="column"] div[data-testid="stImage"] img {
+    max-height: 180px !important;
+    object-fit: cover !important;
+    border-radius: 12px !important;
+}
+
+.env-caption {
+    background-color: #FFFFFF !important;
+    border: 1px solid #E6E1DA !important;
+    border-radius: 12px;
+    padding: 1.25rem;
+    font-size: 0.9rem;
+    color: #4A554F;
+    line-height: 1.5;
+    margin-top: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+
+.env-caption strong {
+    color: #1E352F;
+    font-size: 1.05rem;
+    display: block;
+    margin-bottom: 0.25rem;
 }
 
 /* Rounded Cards */
@@ -212,32 +272,33 @@ CSS = """
     border-radius: 16px;
     padding: 2rem;
     margin-bottom: 1.5rem;
-    box-shadow: 0 4px 20px rgba(45, 75, 55, 0.03);
+    box-shadow: 0 4px 20px rgba(45, 75, 55, 0.02);
 }
 
 .card-title {
-    color: #2D4B37;
-    font-size: 1.4rem;
+    color: #1E352F;
+    font-size: 1.40rem;
     font-weight: 600;
     margin-top: 0;
     margin-bottom: 1rem;
-    border-bottom: 2px solid #F0ECE6;
+    border-bottom: 2px solid #FAF8F5;
     padding-bottom: 0.5rem;
+    font-family: 'Outfit', sans-serif;
 }
 
 /* Highlights */
 .highlight-conflict {
-    border-left: 6px solid #E07A5F !important;
+    border-left: 6px solid #D96B43 !important;
 }
 
 .highlight-blueprint {
-    border-left: 6px solid #86A789 !important;
+    border-left: 6px solid #1E352F !important;
 }
 
 .conflict-text {
     font-size: 1.05rem;
     line-height: 1.6;
-    color: #4A3E3D;
+    color: #2D3732;
     font-weight: 500;
     margin: 0;
 }
@@ -247,61 +308,109 @@ CSS = """
 }
 
 .blueprint-item {
-    background: #F8F9F8;
-    border: 1px solid #EBEFEA;
+    background: #FAF8F5;
+    border: 1px solid #E6E1DA;
     border-radius: 10px;
-    padding: 1rem;
-    margin-bottom: 0.75rem;
+    padding: 1.2rem;
+    margin-bottom: 0.85rem;
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: 14px;
 }
 
 .blueprint-num {
-    background: #86A789;
+    background: #1E352F;
     color: #FFFFFF;
     border-radius: 50%;
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.85rem;
+    font-size: 1.1rem;
     font-weight: 600;
     flex-shrink: 0;
 }
 
 .blueprint-content {
-    color: #2D3732;
-    font-size: 0.95rem;
+    color: #121614;
+    font-size: 1.32rem;
     line-height: 1.5;
+}
+
+/* Input instructions highlighting */
+.input-instructions-wrapper {
+    background-color: #1E352F !important;
+    color: #FAF8F5 !important;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 15px rgba(30, 53, 47, 0.1);
+}
+
+.input-instructions-badge {
+    display: inline-block;
+    background-color: #D96B43 !important;
+    color: #FAF8F5 !important;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-bottom: 0.75rem;
+    letter-spacing: 0.05em;
+}
+
+.input-instructions-title {
+    color: #FAF8F5 !important;
+    font-size: 1.6rem !important;
+    font-weight: 700 !important;
+    margin: 0 0 0.5rem 0 !important;
+    line-height: 1.25 !important;
+    font-family: 'Outfit', sans-serif !important;
+}
+
+.input-instructions-text {
+    color: #D2DFD5 !important;
+    font-size: 0.95rem !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
 }
 
 /* Streamlit Form and Input Styling Overrides */
 div[data-testid="stForm"] {
     background-color: #FFFFFF !important;
     border: 1px solid #E6E1DA !important;
+    border-top: 4px solid #D96B43 !important;
     border-radius: 16px !important;
     padding: 2rem !important;
-    box-shadow: 0 4px 20px rgba(45, 75, 55, 0.03) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
 }
 
-.stButton > button {
-    background-color: #E07A5F !important;
+/* Specific override to make the Tab 1 form forest green */
+div[data-testid="stForm"]:has(input[placeholder="e.g., Mango, Avocado, Fig"]) {
+    background-color: #1E352F !important;
+    color: #FAF8F5 !important;
+    border: 1px solid #1E352F !important;
+    border-top: 4px solid #D96B43 !important;
+    box-shadow: 0 10px 30px rgba(30, 53, 47, 0.15) !important;
+}
+
+.stButton > button, div[data-testid="stFormSubmitButton"] > button {
+    background-color: #D96B43 !important;
     color: #FFFFFF !important;
     border: none !important;
     border-radius: 24px !important;
-    padding: 0.6rem 2rem !important;
+    padding: 0.6rem 2.2rem !important;
     font-size: 1rem !important;
     font-weight: 600 !important;
     transition: all 0.3s ease !important;
-    box-shadow: 0 4px 10px rgba(224, 122, 95, 0.2) !important;
+    box-shadow: 0 4px 12px rgba(217, 107, 67, 0.15) !important;
 }
 
-.stButton > button:hover {
-    background-color: #C9664B !important;
+.stButton > button:hover, div[data-testid="stFormSubmitButton"] > button:hover {
+    background-color: #121614 !important;
     color: #FFFFFF !important;
-    box-shadow: 0 6px 15px rgba(224, 122, 95, 0.3) !important;
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2) !important;
     transform: translateY(-1px);
 }
 
@@ -309,29 +418,59 @@ div[data-testid="stForm"] {
     border-radius: 8px !important;
     border: 1px solid #D2DFD5 !important;
     font-family: 'Outfit', sans-serif !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.95rem !important;
 }
 
 .stTextInput input:focus {
-    border-color: #86A789 !important;
-    box-shadow: 0 0 0 1px #86A789 !important;
+    border-color: #D96B43 !important;
+    box-shadow: 0 0 0 1px #D96B43 !important;
 }
 
 /* Streamlit Tabs Customization */
 button[data-baseweb="tab"] {
-    background: transparent !important;
-    color: #608066 !important;
-    font-size: 0.95rem !important;
-    font-weight: 600 !important;
-    padding: 0.75rem 1.5rem !important;
-    border: 1px solid transparent !important;
-    border-radius: 12px 12px 0 0 !important;
+    background-color: #B4CBB7 !important;
+    color: #121614 !important;
+    padding: 1.0rem 2.8rem !important;
+    border: 3px solid #5C4033 !important;
+    border-bottom: none !important;
+    border-radius: 14px 14px 0 0 !important;
+    margin-right: 12px !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Ensure tab text is bold and 1.55rem, bypassing nested overrides */
+button[data-baseweb="tab"] p, 
+button[data-baseweb="tab"] div, 
+button[data-baseweb="tab"] span, 
+button[data-baseweb="tab"] {
+    font-size: 1.55rem !important;
+    font-weight: 700 !important;
     font-family: 'Outfit', sans-serif !important;
 }
 
+button[data-baseweb="tab"]:hover {
+    background-color: #92B196 !important;
+}
+
+button[data-baseweb="tab"]:hover p, 
+button[data-baseweb="tab"]:hover div, 
+button[data-baseweb="tab"]:hover span {
+    color: #121614 !important;
+}
+
 button[data-baseweb="tab"][aria-selected="true"] {
-    color: #2D4B37 !important;
-    background: #FFFFFF !important;
-    border-color: #E6E1DA #E6E1DA transparent #E6E1DA !important;
+    background-color: #D96B43 !important;
+    border-color: #5C4033 !important;
+    border-bottom: none !important;
+    box-shadow: 0 6px 20px rgba(217, 107, 67, 0.25) !important;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] p, 
+button[data-baseweb="tab"][aria-selected="true"] div, 
+button[data-baseweb="tab"][aria-selected="true"] span {
+    color: #FAF8F5 !important;
 }
 
 [data-baseweb="tab-highlight"], [data-baseweb="tab-border"] {
@@ -340,7 +479,7 @@ button[data-baseweb="tab"][aria-selected="true"] {
 
 [data-baseweb="tab-list"] {
     gap: 4px !important;
-    border-bottom: 2px solid #E6E1DA !important;
+    border-bottom: 4px solid #5C4033 !important;
     background: transparent !important;
     padding: 0 !important;
 }
@@ -361,42 +500,43 @@ header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"], [d
     letter-spacing: 0.03em;
 }
 .badge-adapting {
-    color: #E07A5F;
-    background-color: rgba(224, 122, 95, 0.1);
-    border: 1px solid rgba(224, 122, 95, 0.2);
+    color: #D96B43;
+    background-color: rgba(217, 107, 67, 0.1);
+    border: 1px solid rgba(217, 107, 67, 0.2);
 }
 .badge-experimenting {
-    color: #2D4B37;
-    background-color: rgba(45, 75, 55, 0.1);
-    border: 1px solid rgba(45, 75, 55, 0.2);
+    color: #8C6239;
+    background-color: rgba(140, 98, 57, 0.1);
+    border: 1px solid rgba(140, 98, 57, 0.2);
 }
 .badge-thriving {
-    color: #86A789;
-    background-color: rgba(134, 167, 137, 0.1);
-    border: 1px solid rgba(134, 167, 137, 0.2);
+    color: #1E352F;
+    background-color: rgba(30, 53, 47, 0.1);
+    border: 1px solid rgba(30, 53, 47, 0.2);
 }
 
 /* Comment Box CSS */
 .comment-box {
-    background-color: #F8F9F8 !important;
-    border: 1px solid #EBEFEA !important;
+    background-color: #FFFFFF !important;
+    border: 1px solid #E6E1DA !important;
     border-radius: 10px !important;
     padding: 0.8rem 1rem !important;
     margin-left: 1.5rem !important;
     margin-top: 0.5rem !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.01) !important;
 }
 
 .comment-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px dashed #EBEFEA;
+    border-bottom: 1px dashed #E6E1DA;
     padding-bottom: 0.25rem;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.5rem;
 }
 
 .comment-author {
-    color: #2D4B37 !important;
+    color: #1E352F !important;
     font-weight: 600 !important;
     font-size: 0.82rem !important;
 }
@@ -412,9 +552,10 @@ header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"], [d
     line-height: 1.4 !important;
     margin: 0 !important;
 }
+
 /* Sidebar custom styles */
 [data-testid="stSidebar"] {
-    background-color: #F3F7F0 !important;
+    background-color: #EAF0EB !important;
     border-right: 1px solid #D2DFD5 !important;
 }
 
@@ -440,11 +581,24 @@ header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"], [d
     background-color: #f8f9fa !important;
     box-shadow: 0 1px 3px 0 rgba(60,64,67,0.30), 0 4px 8px 3px rgba(60,64,67,0.15) !important;
 }
+
+/* Align container gaps */
+[data-testid="stHorizontalBlock"] {
+    gap: 1.5rem !important;
+}
+
+/* Enlarge database explorer expander header text by 50% */
+div[data-testid="column"]:first-child .stExpander details summary p {
+    font-size: 1.5em !important;
+    font-weight: 600 !important;
+    color: #1E352F !important;
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
-# Pydantic Model for Structured Gemini Output
+# Pydantic Model for Structured Gemini Output.
+# Enforces that the model's response adheres to a strict JSON structure for reliable parsing.
 class AdaptationPlan(BaseModel):
     conflict: str = Field(description="The primary climatic/biological conflict of growing this plant in this city's region.")
     youbuddy_insights: str = Field(description="Summary of crowd-sourced experiences on YouTube, highlighting conflicting recommendations or varied user experiences as 'Community Notes' or 'Points of Consideration'. Do not declare a single correct method.")
@@ -471,15 +625,15 @@ def get_adaptation_plan(plant: str, location: str) -> AdaptationPlan:
     plant_clean = plant.strip().lower()
     loc_clean = location.strip().lower()
     
-    # Try using Gemini first
+    # Check if Gemini API key exists
     api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
         try:
-            # Query YouBuddy crowd-sourced experiences on YouTube with broadened search criteria
+            # Broaden location parameters in the YouTube search query to ensure relevant gardening video results
             broad_query = get_broadened_youtube_query(plant, location)
             youbuddy_insights = query_youbuddy(broad_query)
             
-            # Pop GOOGLE_GENAI_USE_VERTEXAI to ensure Developer API is used with GEMINI_API_KEY
+            # Pop Vertex AI environmental variables to isolate Gemini Developer API endpoints
             os.environ.pop("GOOGLE_GENAI_USE_VERTEXAI", None)
             client = genai.Client(api_key=api_key)
             prompt = f"""
@@ -739,20 +893,69 @@ with st.sidebar:
             st.success("Signed out successfully.")
             st.rerun()
 
+SVG_LOGO = '<svg width="72" height="72" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 12px;"><path d="M32 24C32 24 35.5 17 42.5 17C42.5 24 39 31 32 31C32 31 28.5 24 32 24Z" fill="#86A789" /><path d="M32 20C32 20 28.5 13 21.5 13C21.5 20 25 27 32 27Z" fill="#D96B43" /><path d="M32 12V32" stroke="#FAF8F5" stroke-width="2.5" stroke-linecap="round" /><path d="M10 32H54" stroke="#B4CBB7" stroke-width="3" stroke-linecap="round" /><path d="M32 32C29 38 25 40 21 46C18 50 14 52 10 55" stroke="#D96B43" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M21 46C19 49 19 53 16 57" stroke="#D96B43" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /><path d="M25 40C20 41 16 41 12 43" stroke="#D96B43" stroke-width="1.8" stroke-linecap="round" /><path d="M32 32C35 38 39 40 43 46C46 50 50 52 54 55" stroke="#D96B43" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M43 46C45 49 45 53 48 57" stroke="#D96B43" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /><path d="M39 40C44 41 48 41 52 43" stroke="#D96B43" stroke-width="1.8" stroke-linecap="round" /><path d="M32 32C30 40 33 46 31 52C29 56 31 59 32 61" stroke="#FAF8F5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /><path d="M31 43C28 46 28 49 26 53" stroke="#FAF8F5" stroke-width="1.8" stroke-linecap="round" /><path d="M32 47C35 50 34 54 36 58" stroke="#FAF8F5" stroke-width="1.8" stroke-linecap="round" /></svg>'
+
 # --- Header ---
 st.markdown(
-    '<div class="header-container">'
-    '<h1 class="header-title">🌿 Defiant Roots</h1>'
-    '<p class="header-subtitle">Your environmental problem-solving partner. Let\'s adapt and grow together!</p>'
-    '</div>',
+    f'<div class="hero-banner">'
+    f'<div class="hero-content">'
+    f'<div style="text-align: center; margin-bottom: 0.85rem;">'
+    f'{SVG_LOGO}'
+    f'</div>'
+    f'<h1 class="hero-title" style="display: flex; align-items: baseline; justify-content: center; gap: 0; flex-wrap: wrap;">'
+    f'<span>Defiant Roots:&nbsp;</span>'
+    f'<span class="hero-title-suffix" style="line-height: 1.15; font-style: italic;">Grow What You Love, Wherever You Are</span>'
+    f'</h1>'
+    f'<p class="hero-subtitle" style="margin-top: 0.85rem;">Bridge the gap between what’s possible and what’s present.</p>'
+    f'</div>'
+    f'</div>',
     unsafe_allow_html=True
 )
 
+# --- Environment Gallery ---
+st.markdown(
+    '<p style="text-align: center; color: #4A554F; font-size: 1.15rem; max-width: 850px; margin: 1.5rem auto 1.5rem auto; line-height: 1.5; font-family: Outfit, sans-serif; font-weight: 500;">'
+    'Most gardening apps tell you what grows in your climate. Defiant Roots helps you adapt your environment to grow what you want through practical, personalized, low-cost adaptation strategies.'
+    '</p>',
+    unsafe_allow_html=True
+)
+env_col1, env_col2, env_col3 = st.columns(3)
+
+with env_col1:
+    st.image("assets/desert.png", use_container_width=True)
+    st.markdown(
+        '<div class="env-caption">'
+        '<strong>🥭 Desert Mangoes</strong>'
+        'Cultivating mangoes and warm-weather crops in dry, high-heat zones using low-cost shading and micro-irrigation hacks.'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+with env_col2:
+    st.image("assets/snow.png", use_container_width=True)
+    st.markdown(
+        '<div class="env-caption">'
+        '<strong>🍊 Citrus in the Snow</strong>'
+        'Protecting citrus trees and warm-weather crops in sub-zero winter zones using insulation shields, thermal mass, and container schedules.'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+with env_col3:
+    st.image("assets/rocky.png", use_container_width=True)
+    st.markdown(
+        '<div class="env-caption">'
+        '<strong>⛰️ Rocky Footholds</strong>'
+        'Growing deep-root crops in nutrient-poor, rock-filled soils using smart aeration and composition hacks.'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
 # --- Tabs Navigation ---
 tab1, tab2, tab3 = st.tabs([
-    "🌿 The Adaptation Engine", 
-    "📅 Proactive Nudges & Experiment Log", 
-    "🤝 Community Learnings"
+    "Adaptation Engine", 
+    "Trial & Triumph", 
+    "Plant Gossip"
 ])
 
 with tab1:
@@ -760,7 +963,7 @@ with tab1:
         st.markdown(
             f'<div class="custom-card highlight-conflict">'
             f'<h3 class="card-title">🔒 User Profile Authentication Required</h3>'
-            f'<p class="conflict-text">Defiant Roots requires a persistent user profile to save adaptation blueprints and track your active growing experiments over time. Please click <strong>Sign in with Google</strong> in the sidebar to get started!</p>'
+            f'<p class="conflict-text">Defiant Roots requires a persistent user profile to save low-cost adaptation blueprints and track your active growing experiments over time. Please click <strong>Sign in with Google</strong> in the sidebar to get started!</p>'
             f'</div>',
             unsafe_allow_html=True
         )
@@ -768,15 +971,62 @@ with tab1:
         col1, col2 = st.columns([1, 2])
         
         with col1:
-            st.markdown("<div class='custom-card'>", unsafe_allow_html=True)
-            st.markdown("<h3 class='card-title'>Adaptation Settings</h3>", unsafe_allow_html=True)
-            
             with st.form("adaptation_form", clear_on_submit=False):
-                plant_input = st.text_input("What would you like to grow?", value="Mango", placeholder="e.g., Mango, Avocado, Fig")
-                location_input = st.text_input("Where do you live?", value="Washington, Utah", placeholder="e.g., Washington, Utah or Chicago, Illinois")
+                st.markdown(
+                    '<div style="margin-bottom: 1.5rem;">'
+                    '<h2 style="color: #FAF8F5; font-size: 1.6rem; font-weight: 700; margin: 0 0 0.5rem 0; font-family: Outfit, sans-serif; line-height: 1.25;">Where will your defiance take root?</h2>'
+                    '<p style="color: #D2DFD5; font-size: 0.95rem; line-height: 1.5; margin: 0 0 1rem 0; font-family: Outfit, sans-serif;">'
+                    'Discover personalized adaptation strategies, a growing companion that adapts with you every step of the way, and a community of growers turning ambitious ideas into living experiments.</p>'
+                    '<p style="color: #D2DFD5; font-size: 0.95rem; line-height: 1.5; margin: 0; font-family: Outfit, sans-serif;">'
+                    'Enter the crop you want to cultivate and your region below. We will calculate regional microclimate baselines and community hacks to build your low-cost adaptation blueprint.</p>'
+                    '</div>',
+                    unsafe_allow_html=True
+                )
+                plant_input = st.text_input("Begin here by entering what you want to grow", value="Mango", placeholder="e.g., Mango, Avocado, Fig", label_visibility="collapsed")
+                st.markdown("<label style='font-size: 1.25rem; font-weight: 700; color: #FAF8F5; display: block; margin-top: 1.25rem; margin-bottom: 0.35rem; font-family: Outfit, sans-serif;'>Where do you live?</label>", unsafe_allow_html=True)
+                location_input = st.text_input("Where do you live?", value="Washington, Utah", placeholder="e.g., Washington, Utah or Chicago, Illinois", label_visibility="collapsed")
                 submit_btn = st.form_submit_button("Bridge the Gap")
+            
+            # Breathing space
+            st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
+            
+            # Database History Expander
+            with st.expander("🔍 Explore Past Adaptation Blueprint Hacks"):
+                search_query_bp = st.text_input("Filter past searches by plant or location:", key="search_blueprints", placeholder="e.g. Mango, Salt Lake")
                 
-            st.markdown("</div>", unsafe_allow_html=True)
+                history_rows = database.get_adaptation_searches()
+                if history_rows:
+                    # Filter history rows if search input exists
+                    if search_query_bp:
+                        q = search_query_bp.strip().lower()
+                        history_rows = [
+                            row for row in history_rows
+                            if q in row["plant_name"].lower() or q in row["location"].lower()
+                        ]
+                    
+                    if not history_rows:
+                        st.info("Sorry, that isn't yet in your database. But we welcome your joining our community and your journey will be reflected in this database for future searches!")
+                    else:
+                        history_list = []
+                        for row in history_rows:
+                            import json
+                            try:
+                                bp = ", ".join(json.loads(row['blueprint']))
+                            except Exception:
+                                bp = row['blueprint']
+                            history_list.append({
+                                "Time": row['timestamp'],
+                                "Plant": row['plant_name'],
+                                "Location": row['location'],
+                                "Conflict": row['conflict'],
+                                "Blueprint Hacks": bp
+                            })
+                        st.dataframe(pd.DataFrame(history_list), use_container_width=True)
+                else:
+                    if search_query_bp:
+                        st.info("Sorry, that isn't yet in your database. But we welcome your joining our community and your journey will be reflected in this database for future searches!")
+                    else:
+                        st.write("No search history found yet.")
             
         with col2:
             if submit_btn:
@@ -787,11 +1037,12 @@ with tab1:
                 elif not re.match(r"^[a-zA-Z0-9\s]+$", plant_sanitized):
                     st.error("Plant name must only contain alphanumeric characters and spaces.")
                 else:
-                    # 2. Validate location using Nominatim Geocoding API
+                    # 2. Validate location using Nominatim Geocoding API to prevent mock or nonsensical locations
                     with st.spinner("Verifying location..."):
                         import sys
                         
                         def geocode_location(loc_name: str) -> str | None:
+                            # Query OpenStreetMap's Nominatim geocoding services to confirm the city/state exists
                             url = "https://nominatim.openstreetmap.org/search"
                             headers = {"User-Agent": "DefiantRootsApp/1.0 (rosalyn.velasquez@gmail.com)"}
                             params = {"q": loc_name, "format": "json", "limit": 1}
@@ -898,58 +1149,25 @@ with tab1:
                     f'<div class="custom-card highlight-blueprint">'
                     f'<h3 class="card-title">🛠️ Low-Cost Adaptation Blueprint ({active_exp["plant_name"]})</h3>'
                     f'<div style="background-color: #EEF5EE; border-left: 4px solid #4E7C5E; border-radius: 6px; padding: 0.75rem; margin-bottom: 1rem; border: 1px solid #D8E6D8;">'
-                    f'<h4 style="color: #2D4B37; margin: 0 0 0.25rem 0; font-size: 0.95rem;">🚀 Start-up Phase: How to Get Started</h4>'
-                    f'<p style="color: #4A554F; font-size: 0.9rem; line-height: 1.45; margin: 0; white-space: pre-wrap;">{startup_text}</p>'
+                    f'<h4 style="color: #2D4B37; margin: 0 0 0.25rem 0; font-size: 1.4rem;">🚀 Start-up Phase: How to Get Started</h4>'
+                    f'<p style="color: #4A554F; font-size: 1.3rem; line-height: 1.45; margin: 0; white-space: pre-wrap;">{startup_text}</p>'
                     f'</div>'
-                    f'<strong style="color: #2D4B37; font-size: 0.9rem; display: block; margin-bottom: 0.5rem;">📋 Ongoing General Adaptation Hacks:</strong>'
-                    f'<div class="blueprint-list">{blueprint_items_html}</div>'
+                    f'<strong style="color: #2D4B37; font-size: 1.35rem; display: block; margin-bottom: 0.5rem;">📋 Ongoing General Adaptation Hacks:</strong>'
+                    f'<div class="blueprint-list" style="font-size: 1.3rem;">{blueprint_items_html}</div>'
+                    f'<div style="margin-top: 1rem; background-color: #FAF5F0; border-left: 4px solid #D96B43; border-radius: 6px; padding: 0.75rem; border: 1px solid #F5EAE0;">'
+                    f'<strong style="color: #5C4033; font-size: 1.35rem; display: block; margin-bottom: 0.25rem;">🌱 Next Steps:</strong>'
+                    f'<p style="color: #5C4033; font-size: 1.3rem; line-height: 1.45; margin: 0;">'
+                    f'Engage with your garden agent companion on weekly basis on the <strong>Trial & Triumph</strong> tab to adjust your growing journey as needed. Also visit <strong>Plant Gossip</strong> tab to join the growing community of growers like you!'
+                    f'</p>'
+                    f'</div>'
                     f'</div>',
                     unsafe_allow_html=True
                 )
             else:
                 st.info("Enter a plant and location to generate your adaptation blueprint and begin your experiment.")
-            
-            # Database History Expander
-            with st.expander("🔍 Past Adaptation Searches History (Database Explorer)"):
-                search_query_bp = st.text_input("Filter past searches by plant or location:", key="search_blueprints", placeholder="e.g. Mango, Salt Lake")
-                
-                history_rows = database.get_adaptation_searches()
-                if history_rows:
-                    # Filter history rows if search input exists
-                    if search_query_bp:
-                        q = search_query_bp.strip().lower()
-                        history_rows = [
-                            row for row in history_rows
-                            if q in row["plant_name"].lower() or q in row["location"].lower()
-                        ]
-                    
-                    if not history_rows:
-                        st.info("Sorry, that isn't yet in your database. But we welcome your joining our community and your journey will be reflected in this database for future searches!")
-                    else:
-                        history_list = []
-                        for row in history_rows:
-                            import json
-                            try:
-                                bp = ", ".join(json.loads(row['blueprint']))
-                            except Exception:
-                                bp = row['blueprint']
-                            history_list.append({
-                                "Time": row['timestamp'],
-                                "Plant": row['plant_name'],
-                                "Location": row['location'],
-                                "Conflict": row['conflict'],
-                                "Blueprint Hacks": bp
-                            })
-                        st.dataframe(pd.DataFrame(history_list), use_container_width=True)
-                else:
-                    if search_query_bp:
-                        st.info("Sorry, that isn't yet in your database. But we welcome your joining our community and your journey will be reflected in this database for future searches!")
-                    else:
-                        st.write("No search history found yet.")
 
 with tab2:
-    st.markdown("<div class='custom-card'>", unsafe_allow_html=True)
-    st.markdown("<h3 class='card-title'>📅 Proactive Nudges & The Weekly Experiment Log</h3>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: #1E352F; font-family: Outfit; font-size: 1.8rem; margin-bottom: 1.5rem; font-weight: 700;'>Weekly Check-in with Your Growing Companion Agent</h2>", unsafe_allow_html=True)
     
     if st.session_state.user is None:
         st.warning("Please sign in with Google in the sidebar to track experiments.")
@@ -1022,11 +1240,11 @@ with tab2:
                     st.info(
                         f"📅 Week {current_week} has begun!\n\n"
                         "To simulate the passage of time and trigger the Proactive Progress Agent check-in nudge for this crop, "
-                        "click the **Trigger Weekly Weather Check-In** button below."
+                        "click the **Trigger Weekly Check-In Early** button below."
                     )
                 
                 # Mock Background Trigger Button
-                if st.button("🚀 Trigger Weekly Weather Check-In"):
+                if st.button("🚀 Trigger Weekly Check-In Early"):
                     with st.spinner("Background worker fetching weather and drafting nudge..."):
                         import loop_worker
                         loop_worker.run_loop_worker(target_experiment_id=active_exp["id"])
@@ -1112,14 +1330,14 @@ with tab2:
                             is_image_valid = True
                             
                             if uploaded_image is not None:
-                                # 1. Validate file size (enforce 5MB maximum file size)
+                                # 1. Validate file size (enforce 5MB maximum file size limit for safety)
                                 max_size = 5 * 1024 * 1024 # 5MB
                                 raw_bytes = uploaded_image.getvalue()
                                 if len(raw_bytes) > max_size:
                                     st.error("Uploaded image exceeds the 5MB size limit. Please upload a smaller photo.")
                                     is_image_valid = False
                                 else:
-                                    # 2. Validate MIME type using magic bytes (not just the file extension)
+                                    # 2. Validate MIME type using magic bytes (rather than relying on extension metadata)
                                     if raw_bytes[:3] == b"\xff\xd8\xff":
                                         detected_mime = "image/jpeg"
                                     elif raw_bytes[:8] == b"\x89PNG\r\n\x1a\n":
@@ -1131,11 +1349,12 @@ with tab2:
                                         st.error("Invalid image format. Only JPEG and PNG photos are accepted.")
                                         is_image_valid = False
                                     else:
-                                        # 3. Strip EXIF metadata from the image before passing it to Gemini
+                                        # 3. Strip EXIF metadata from the image to remove GPS tracking or cameras info
                                         try:
                                             img = Image.open(io.BytesIO(raw_bytes))
                                             out_stream = io.BytesIO()
                                             fmt = "PNG" if detected_mime == "image/png" else "JPEG"
+                                            # Saving without EXIF parameter strips metadata during conversion
                                             img.save(out_stream, format=fmt)
                                             image_bytes = out_stream.getvalue()
                                             mime_type = detected_mime
@@ -1217,14 +1436,23 @@ with tab2:
                         if "image_path" in log.keys() and log["image_path"] and os.path.exists(log["image_path"]):
                             st.image(log["image_path"], caption="Uploaded Plant Photo", width=250)
                         st.write(f"**Weekly Action Plan:** {log['action_plan']}")
-    st.markdown("</div>", unsafe_allow_html=True)
 
 with tab3:
     col_left, col_right = st.columns([1, 2])
     
     with col_left:
-        st.markdown("<div class='custom-card'>", unsafe_allow_html=True)
-        st.markdown("<h3 class='card-title'>🌿 Share Your Journey</h3>", unsafe_allow_html=True)
+        POT_SPILLING_DIRT_SVG = (
+            '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block; vertical-align:middle; margin-right:8px; transform: rotate(-15deg);">'
+            '<path d="M5 13L7 6H17L19 13H5Z" fill="#D96B43" stroke="#5C4033" stroke-width="1.5" />'
+            '<rect x="6" y="4" width="12" height="2" rx="0.5" fill="#E6A185" stroke="#5C4033" stroke-width="1.5" />'
+            '<path d="M2 17C4 15 6 15 8 17C10 19 12 19 14 17C16 15 18 15 20 17" stroke="#8C6239" stroke-width="2.5" stroke-linecap="round" />'
+            '<circle cx="4" cy="19" r="1.5" fill="#5C4033" />'
+            '<circle cx="9" cy="20" r="1" fill="#5C4033" />'
+            '<circle cx="13" cy="19" r="1.2" fill="#5C4033" />'
+            '<circle cx="18" cy="20" r="1.5" fill="#5C4033" />'
+            '</svg>'
+        )
+        st.markdown(f"<h3 style='color: #1E352F; font-family: Outfit; font-size: 1.45rem; margin-top: 0; margin-bottom: 1.25rem; font-weight: 700;'>{POT_SPILLING_DIRT_SVG}Spill the Dirt</h3>", unsafe_allow_html=True)
         
         with st.form("new_log_form", clear_on_submit=True):
             grower_input = st.text_input("Your Name", placeholder="e.g., Rosalyn V.")
@@ -1232,25 +1460,33 @@ with tab3:
             location_log_input = st.text_input("Where are you growing it?", placeholder="e.g., Washington, UT")
             status_input = st.selectbox("Status", ["Adapting", "Experimenting", "Thriving"])
             hack_input = st.text_area("Latest Hack / What are you learning?", placeholder="e.g., Using south-facing brick walls for heat...")
+            question_input = st.text_area("Question", placeholder="e.g., Why are my mango leaves curling and showing yellow tips?")
             log_submit = st.form_submit_button("Post Log")
             
         if log_submit:
-            if grower_input and plant_log_input and location_log_input and hack_input:
+            has_content = hack_input.strip() or question_input.strip()
+            if grower_input and plant_log_input and location_log_input and has_content:
                 grower_name_clean = grower_input.strip()
+                # Rate Limiting: Prevent community board spam by capping grower posts at 10 per day
                 posts_today = database.get_user_posts_today(grower_name_clean)
                 if posts_today >= 10:
                     st.error("Rate limit exceeded: You can only post 10 community logs per day.")
                 else:
-                    database.add_community_log(grower_name_clean, plant_log_input.strip()[:80], location_log_input.strip(), status_input, hack_input.strip())
+                    database.add_community_log(
+                        grower_name_clean, 
+                        plant_log_input.strip()[:80], 
+                        location_log_input.strip(), 
+                        status_input, 
+                        hack_input.strip(),
+                        question=question_input.strip()
+                    )
                     st.success("Successfully posted your log!")
                     st.rerun()
             else:
-                st.error("Please fill out all fields.")
-        st.markdown("</div>", unsafe_allow_html=True)
+                st.error("Please fill out name, plant, location, and either a hack or a question.")
         
     with col_right:
-        st.markdown("<div class='custom-card'>", unsafe_allow_html=True)
-        st.markdown("<h3 class='card-title'>🤝 Live Growing Logs & Conversations</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #1E352F; font-family: Outfit; font-size: 1.45rem; margin-top: 0; margin-bottom: 0.5rem; font-weight: 700;'>🍇 The Grapevine</h3>", unsafe_allow_html=True)
         st.write("Real-time progress updates and troubleshooting discussions from community growers.")
         
         # Search input for logs history
@@ -1266,7 +1502,8 @@ with tab3:
                 if q in log["plant_name"].lower()
                 or q in log["location"].lower()
                 or q in log["grower_name"].lower()
-                or q in log["latest_hack"].lower()
+                or (log["latest_hack"] and q in log["latest_hack"].lower())
+                or ("question" in log.keys() and log["question"] and q in log["question"].lower())
             ]
             
         if not logs:
@@ -1282,18 +1519,33 @@ with tab3:
             except Exception:
                 log_time = log['timestamp']
             
+            hack_html = ""
+            if log["latest_hack"] and log["latest_hack"].strip():
+                hack_html = (
+                    f'<div style="background: #FAF8F5; border-left: 4px solid #86A789; padding: 0.75rem 1rem; border-radius: 4px; font-size: 0.95rem; color: #121614; margin-bottom: 0.75rem;">'
+                    f'<strong>Latest Hack:</strong> {log["latest_hack"]}'
+                    f'</div>'
+                )
+                
+            question_html = ""
+            if "question" in log.keys() and log["question"] and log["question"].strip():
+                question_html = (
+                    f'<div style="background: #FAF5F0; border-left: 4px solid #D96B43; padding: 0.75rem 1rem; border-radius: 4px; font-size: 0.95rem; color: #121614; margin-bottom: 0.75rem;">'
+                    f'<strong>Question:</strong> {log["question"]}'
+                    f'</div>'
+                )
+            
             # Display Card HTML with post date
             st.markdown(
-                f'<div style="border: 1px solid #EBEFEA; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; background: #FFFFFF;">'
+                f'<div style="border: 1px solid #E6E1DA; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; background: #FFFFFF; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.01);">'
                 f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">'
-                f'<strong style="color: #2D4B37; font-size: 1.1rem;">{log["grower_name"]}</strong>'
+                f'<strong style="color: #1E352F; font-size: 1.1rem;">{log["grower_name"]}</strong>'
                 f'<span class="badge {status_class}">{log["status"]}</span>'
                 f'</div>'
                 f'<div style="color: #8C9A92; font-size: 0.78rem; margin-bottom: 0.5rem;">Posted on {log_time}</div>'
                 f'<div style="color: #8C9A92; font-size: 0.85rem; margin-bottom: 0.75rem;">Growing <strong>{log["plant_name"]}</strong> in {log["location"]}</div>'
-                f'<div style="background: #FDFBF7; border-left: 4px solid #86A789; padding: 0.75rem 1rem; border-radius: 4px; font-size: 0.95rem; color: #2D3732; margin-bottom: 1rem;">'
-                f'<strong>Latest Hack:</strong> {log["latest_hack"]}'
-                f'</div>'
+                f'{hack_html}'
+                f'{question_html}'
                 f'</div>',
                 unsafe_allow_html=True
             )
@@ -1307,7 +1559,7 @@ with tab3:
                 except Exception:
                     c_time = comment['timestamp']
                     
-                # Run all user-submitted comments through bleach with tags stripped before rendering
+                # XSS Protection: Clean all user-submitted texts through bleach to strip scripting vectors
                 bleached_text = bleach.clean(comment["comment_text"], tags=[], strip=True)
                 
                 st.markdown(
@@ -1341,5 +1593,3 @@ with tab3:
                         st.error("Please enter your name and comment.")
             
             st.markdown('<hr style="border: none; border-top: 1px solid #EBEFEA; margin: 1.5rem 0;" />', unsafe_allow_html=True)
-            
-        st.markdown("</div>", unsafe_allow_html=True)
