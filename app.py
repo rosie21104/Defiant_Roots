@@ -1359,10 +1359,12 @@ with tab2:
                                             image_bytes = out_stream.getvalue()
                                             mime_type = detected_mime
                                             
-                                            # Save clean image file to uploads directory
-                                            os.makedirs("uploads", exist_ok=True)
+                                            # Save clean image file to uploads directory inside the persistent volume folder
+                                            db_dir = os.environ.get("DB_DIR", ".")
+                                            uploads_dir = os.path.join(db_dir, "uploads")
+                                            os.makedirs(uploads_dir, exist_ok=True)
                                             ext = "png" if detected_mime == "image/png" else "jpg"
-                                            image_path = f"uploads/exp_{active_exp['id']}_week_{current_week}.{ext}"
+                                            image_path = os.path.join(uploads_dir, f"exp_{active_exp['id']}_week_{current_week}.{ext}")
                                             with open(image_path, "wb") as f:
                                                 f.write(image_bytes)
                                         except Exception as e:

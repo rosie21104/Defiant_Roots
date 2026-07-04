@@ -3,10 +3,15 @@ import sqlite3
 import json
 from datetime import datetime
 
-DB_FILE = "defiant_roots.db"
+# Support persistent database directories in stateless environments (e.g., Cloud Run mounted GCS volumes)
+DB_DIR = os.environ.get("DB_DIR", ".")
+DB_FILE = os.path.join(DB_DIR, "defiant_roots.db")
 
 def get_db_connection():
     """Establishes and returns a sqlite3 database connection with Row factory."""
+    # Ensure target directory exists
+    if DB_DIR != ".":
+        os.makedirs(DB_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn

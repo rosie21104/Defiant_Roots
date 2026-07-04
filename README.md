@@ -142,25 +142,30 @@ python3 query_youbuddy_cli.py "growing mangos in dry desert zone 9"
 
 ---
 
-## 🚀 Google Cloud Run Deployment
+## 🚀 Google Cloud Run Deployment (Option A: GCS FUSE Volume Mounts)
 
-To deploy this project to Google Cloud Run:
+To deploy this project to Google Cloud Run with **Option A** (mounting a persistent Google Cloud Storage bucket to preserve your database and image uploads):
 
-### 1. Build and Deploy using Google Cloud Build
-Run the following command in the project root folder to compile the Docker image and deploy it directly:
+### 1. Create a Google Cloud Storage Bucket
+Create a dedicated bucket in your Google Cloud project (e.g., `defiant-roots-db-storage`):
 ```bash
-gcloud run deploy defiant-roots \
-    --source . \
-    --platform managed \
-    --region us-central1 \
-    --allow-unauthenticated \
-    --set-env-vars GEMINI_API_KEY=your_gemini_api_key_here,YOUTUBE_API_KEY=your_optional_youtube_key_here
+gcloud storage buckets create gs://YOUR_GCS_BUCKET_NAME --location=us-central1
 ```
 
-### ⚠️ Production Database Architecture Note
-> [!WARNING]
-> **Stateless Ephemeral Storage**: Google Cloud Run is a stateless container execution platform. The local SQLite database (`defiant_roots.db`) is stored inside the container filesystem, meaning that **all user history, logs, and comments will reset whenever the Cloud Run instance scales down to zero or restarts.**
-> 
-> **For Production/Evaluator Deployment**:
-> To ensure data persistence in production, you should connect to a managed database instance (such as **Google Cloud SQL for PostgreSQL**) by updating [database.py](database.py) to target the cloud instance and configuring Cloud SQL connection pools in the Cloud Run deployment settings.
+### 2. Build and Deploy to Cloud Run with GCS Volume Mount
+Run the following deployment command from the project root directory. This command mounts your GCS bucket as a folder inside the container at `/data` and sets the `DB_DIR` environment variable to write there:
+```bash
+gcloud beta run deploy defiant-roots \
+    --source . \
+    --region us-central1 \
+    --allow-unauthenticated \
+    --add-volume=name=db-volume,type=cloud-storage,bucket=YOUR_GCS_BUCKET_NAME \
+    --add-volume-mount=volume=db-volume,mount-path=/data \
+    --set-env-vars DB_DIR=/data,GEMINI_API_KEY=your_gemini_api_key_here,YOUTUBE_API_KEY=your_optional_youtube_key_here
+```
+*(Note: Cloud Storage volume mounts require using `gcloud beta run deploy`)*
+
+### ⚠️ How Data Persistence Works
+* **Stateless vs Persistent**: Cloud Run containers are stateless, but since we map `DB_DIR=/data` in the environment variables, both the SQLite database file (`defiant_roots.db`) and uploaded plant photos (`uploads/` folder) are written directly to GCS.
+* **Persistent Sessions**: Even when the container instance scales down to zero or restarts, the next session will mount the same bucket and load the database files seamlessly, providing judges and users a persistent experience.
 
