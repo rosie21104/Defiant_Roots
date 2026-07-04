@@ -57,6 +57,9 @@ graph TD
     end
 ```
 
+#### Architecture Diagram Visual
+![Architecture & Multi-Agent Workflow](assets/Arch_Multi-Agent_workflow.png)
+
 ### 🧠 Multi-Agent Roles
 1. **Root Orchestrator Agent**: Coordinates the multi-agent hierarchy, dispatches research requests, maps plant vulnerabilities against local climate hazards, and compiles the final plan of action.
 2. **Plant Specialist Agent**: Researches botanical baselines, temperature thresholds, sunlight needs, and critical environmental vulnerabilities for target crops.
@@ -76,6 +79,9 @@ To ensure a secure, robust application suitable for evaluation, Defiant Roots in
 * **SQL Injection Prevention**: All queries to SQLite use parameterized query boundaries (`?` placeholders) instead of raw string concatenation.
 * **Subprocess Arguments Escaping**: Subprocess invocations for YouBuddy CLI validate inputs against strict alphanumeric regex guidelines to prevent command injection.
 * **Spam Rate Limiting**: Grower entries to the community Grapevine board are capped at **10 posts per day per user** to maintain data integrity.
+
+#### Security Flow Diagram Visual
+![Security Guardrails Diagram](assets/Security_diagram.png)
 
 ---
 
@@ -133,3 +139,28 @@ To query the YouTube Analyst CLI tool directly in the console:
 ```bash
 python3 query_youbuddy_cli.py "growing mangos in dry desert zone 9"
 ```
+
+---
+
+## 🚀 Google Cloud Run Deployment
+
+To deploy this project to Google Cloud Run:
+
+### 1. Build and Deploy using Google Cloud Build
+Run the following command in the project root folder to compile the Docker image and deploy it directly:
+```bash
+gcloud run deploy defiant-roots \
+    --source . \
+    --platform managed \
+    --region us-central1 \
+    --allow-unauthenticated \
+    --set-env-vars GEMINI_API_KEY=your_gemini_api_key_here,YOUTUBE_API_KEY=your_optional_youtube_key_here
+```
+
+### ⚠️ Production Database Architecture Note
+> [!WARNING]
+> **Stateless Ephemeral Storage**: Google Cloud Run is a stateless container execution platform. The local SQLite database (`defiant_roots.db`) is stored inside the container filesystem, meaning that **all user history, logs, and comments will reset whenever the Cloud Run instance scales down to zero or restarts.**
+> 
+> **For Production/Evaluator Deployment**:
+> To ensure data persistence in production, you should connect to a managed database instance (such as **Google Cloud SQL for PostgreSQL**) by updating [database.py](database.py) to target the cloud instance and configuring Cloud SQL connection pools in the Cloud Run deployment settings.
+
