@@ -15,8 +15,11 @@ def send_nudge_notification(experiment_id: int, week_num: int, plant_name: str, 
     Validates, logs to database, and simulates sending a nudge notification.
     Returns True if validation and log-before-send succeed, False otherwise.
     """
-    # 1. Cap all outgoing messages at 320 characters to keep SMS/Email lengths reasonable
-    capped_msg = raw_message[:320]
+    # 1. Cap all outgoing messages depending on contact preference to keep lengths reasonable
+    if "sms" in preference.lower():
+        capped_msg = raw_message[:320]
+    else:
+        capped_msg = raw_message[:4000]
     
     # 2. Strip any markdown formatting before sending so raw markdown tokens are not sent over SMS/Email channels
     clean_msg = re.sub(r"[\*\_`#]+", "", capped_msg)

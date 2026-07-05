@@ -1431,7 +1431,8 @@ with tab2:
                 st.markdown("<h4 style='color: #2D4B37;'>📜 Past Weekly Log History</h4>", unsafe_allow_html=True)
                 for log in past_logs:
                     log_title = get_log_display_title(log["week_number"], log["updated_at"], logs, active_exp["created_at"])
-                    with st.expander(log_title):
+                    is_most_recent = (log["week_number"] == current_week - 1)
+                    with st.expander(log_title, expanded=is_most_recent):
                         st.write(f"**Weather at time:** {log['weather_context']}")
                         st.write(f"**Nudge Sent:** {log['nudge_message']}")
                         st.write(f"**Your Feedback:** {log['user_feedback']}")
