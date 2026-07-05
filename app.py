@@ -749,7 +749,10 @@ def generate_weekly_action_plan(feedback: str, weather: str, blueprint: str, ima
             )
             return response.text.strip()
         except Exception as e:
-            pass
+            import traceback
+            import sys
+            print("ERROR: Exception in generate_weekly_action_plan:", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
 
     # Dynamic Local Fallback Plan on API Error (e.g. 429 quota limits)
     youbuddy_clean = youbuddy_context if youbuddy_context else "Use temporary wind barriers and shade screens."
