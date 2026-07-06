@@ -768,10 +768,10 @@ def generate_weekly_action_plan(feedback: str, weather: str, blueprint: str, ima
 with st.sidebar:
     st.markdown("<h2 style='color: #2D4B37; font-family: Outfit;'>🌿 Planter Profile</h2>", unsafe_allow_html=True)
     if st.session_state.user is None:
-        st.write("Sign in with Google to start your micro-climate experiments and track progress week-by-week.")
+        st.write("Sign in to start your micro-climate experiments and track progress week-by-week.")
         
-        # Google sign-in trigger
-        google_login = st.button("👤 Sign in with Google", use_container_width=True)
+        # 1. Option A: Demo Login (with Google brand style simulation)
+        google_login = st.button("👤 Sign In to Pre-loaded Demo", use_container_width=True, help="Access pre-loaded Mango & Spinach experiments.")
         if google_login:
             # Register user in DB
             db_user = database.get_or_create_user(
@@ -816,6 +816,38 @@ with st.sidebar:
                 
             st.success("Signed in successfully!")
             st.rerun()
+
+        # 2. Option B: Create Custom Sandbox Account
+        st.markdown("<hr style='border-top: 1px dashed #D2DFD5; margin: 0.75rem 0;' />", unsafe_allow_html=True)
+        st.markdown("<strong style='color: #2D4B37; font-size: 0.85rem;'>Or Start a Fresh Sandbox:</strong>", unsafe_allow_html=True)
+        with st.expander("➕ Create New Account"):
+            with st.form("custom_register_form"):
+                new_name = st.text_input("Your Name", placeholder="e.g. Judge John")
+                new_email = st.text_input("Your Email", placeholder="e.g. john@example.com")
+                register_btn = st.form_submit_button("Start Clean Sandbox", use_container_width=True)
+                
+            if register_btn:
+                if new_name.strip() and new_email.strip():
+                    # Generate a clean user ID from email prefix
+                    user_id_clean = "user_" + new_email.split("@")[0].replace(".", "_").strip().lower()
+                    db_user = database.get_or_create_user(
+                        user_id_clean,
+                        new_email.strip(),
+                        new_name.strip()
+                    )
+                    st.session_state.user = {
+                        "user_id": db_user["user_id"],
+                        "email": db_user["email"],
+                        "name": db_user["name"],
+                        "contact_preference": db_user["contact_preference"] if "contact_preference" in db_user.keys() else "Email",
+                        "phone": db_user["phone"] if "phone" in db_user.keys() else ""
+                    }
+                    st.session_state.experiments = []
+                    st.session_state.selected_experiment_id = None
+                    st.success(f"Welcome {new_name.strip()}! Clean sandbox created.")
+                    st.rerun()
+                else:
+                    st.error("Please fill out both Name and Email.")
     else:
         st.markdown(
             f'<div style="background: #ffffff; border: 1px solid #E6E1DA; border-radius: 12px; padding: 1.25rem; margin-top: 0.5rem; margin-bottom: 1rem; box-shadow: 0 2px 8px rgba(45, 75, 55, 0.04);">'
