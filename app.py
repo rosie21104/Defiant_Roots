@@ -956,11 +956,6 @@ st.markdown(
 )
 env_col1, env_col2, env_col3 = st.columns(3)
 
-import os
-for img_path in ["assets/desert.png", "assets/snow.png", "assets/rocky.png"]:
-    if not os.path.exists(img_path):
-        st.sidebar.error(f"DEBUG: {img_path} does not exist in container!")
-
 with env_col1:
     st.image("assets/desert.png", use_container_width=True)
     st.markdown(
